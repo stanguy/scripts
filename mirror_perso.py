@@ -199,7 +199,7 @@ class Mirroir (FTP):
         if not self._dry_run:
             FTP.rmd( self, target )
 
-    def delete( target ):
+    def delete( self, target ):
         if not self._dry_run:
             FTP.delete( self, target )
         

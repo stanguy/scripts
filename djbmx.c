@@ -33,8 +33,8 @@ void mx_list_fill( mx_list_t*, const char* );
 void mx_list_fill_name( mx_list_t* , const char* );
 void mx_list_add_ip( mx_list_t* , const char* );
 void mx_list_test_them( mx_list_t* );
-gboolean _mx_list_test_one( gpointer* );
 
+uchar_t mx_debug_mode = 0;
 
 int main( int argc, char* argv [] )
 {
@@ -73,11 +73,12 @@ void mx_list_fill( mx_list_t* ml, const char* domain )
     while ( current < ( mxs.s + mxs.len ) ) {
         int weight = 255 * current[ 0 ] + current[ 1 ];
         current += 2;
-        fprintf( stdout,
-                 "%s\t\tMX\t%-2d\t%s\n",
-                 domain,
-                 weight,
-                 current );
+        if ( mx_debug_mode )
+            fprintf( stdout,
+                     "%s\t\tMX\t%-2d\t%s\n",
+                     domain,
+                     weight,
+                     current );
         mx_list_fill_name( ml, current );
         while ( *current != 0 )
             current++;
@@ -98,7 +99,7 @@ void mx_list_fill_name( mx_list_t* ml, const char* host )
     dns_ip4( &out, &shost );
     
     i = 0;
-    xtra = out.s;
+    xtra = (uchar_t*)out.s;
     while ( i  < out.len ) {
         snprintf( ip, 16, "%d.%d.%d.%d",
                   (uint16)  xtra[i],
@@ -121,56 +122,6 @@ void mx_list_add_ip( mx_list_t* ml, const char* ip )
 }
 
 
-#if 0
-void mx_list_test_them( mx_list_t* ml )
-{
-    GList* iter;
-    for ( iter = g_list_first( ml->mxs ) ;
-          NULL != iter ;
-          iter = g_list_next( iter ) ) {
-        if ( _mx_list_test_one( iter->data ) ) {
-            ml->mx_ok++;
-        }
-    }
-}
-
-void signal_nodo( int x)
-{}
-
-
-gboolean _mx_list_test_one( gpointer* data )
-{
-    struct in_addr* in = (struct in_addr*)data;
-    int unit;
-    struct sockaddr_in sin;
-    struct sigaction phan;
-    phan.sa_handler = signal_nodo;
-    
-    sin.sin_port = htons( 25 );
-    sin.sin_addr.s_addr = in->s_addr;
-    sin.sin_family = AF_INET;
-    bzero(&sin.sin_zero, sizeof(sin.sin_zero));
-    
-    if ( ( unit = socket( AF_INET, SOCK_STREAM, 0 ) ) < 0 ) {
-        fprintf( stderr, "Error creating socket\n" );
-        return 0;
-    }
-//    signal( SIGALRM, (sig_t)signal_nodo );
-    sigemptyset(&phan.sa_mask);
-    phan.sa_flags = !SA_RESTART;
-    sigaction(SIGALRM, &phan, NULL);
-    alarm( 5 );
-    if ( connect( unit, (struct sockaddr*)&sin, sizeof(sin) ) < 0) {
-        fprintf( stderr, "Error connecting\n" );
-        return 0;
-    }
-//    alarm( 0 );
-    close( unit );
-    return 1;
-}
-
-#endif
-
 int _create_socket( gpointer* );
 
 
@@ -180,11 +131,12 @@ void mx_list_test_them( mx_list_t* ml )
     int max_socket = -1 ;
     fd_set readset, tempset;
     int waiting_sockets = 0;
-    FD_ZERO(&readset);
     int i;
-
     int* socket_list = malloc( sizeof( int ) * g_list_length( ml->mxs ) );
     
+    FD_ZERO(&readset);
+
+
     for ( iter = g_list_first( ml->mxs ) ;
           NULL != iter ;
           iter = g_list_next( iter ) ) {
@@ -192,13 +144,14 @@ void mx_list_test_them( mx_list_t* ml )
 
         struct in_addr* in = (struct in_addr*)(iter->data);
         struct sockaddr_in sin;
+        int cret ;
         
         sin.sin_port = htons( 25 );
         sin.sin_addr.s_addr = in->s_addr;
         sin.sin_family = AF_INET;
         bzero(&sin.sin_zero, sizeof(sin.sin_zero));
 
-        int cret = connect( sock, (struct sockaddr*)&sin, sizeof(sin) ) ;
+        cret = connect( sock, (struct sockaddr*)&sin, sizeof(sin) ) ;
 
         if ( ( -1 == cret ) && ( EINPROGRESS == errno ) ) {
             // connection is happening in the background
@@ -242,7 +195,8 @@ void mx_list_test_them( mx_list_t* ml )
                         FD_CLR( i, &readset );
                     } else {
                         code[3] = 0;
-                        printf( "Code: %s\n", code );
+                        if ( mx_debug_mode )
+                            printf( "Code: %s\n", code );
                         close( i );
                         FD_CLR( i, &readset );
                         ml->mx_ok++;

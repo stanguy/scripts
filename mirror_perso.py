@@ -136,6 +136,9 @@ class Mirroir (FTP):
             fichiers_distants = self.nlst()
         except ftplib.error_perm,v:
             fichiers_distants =  []
+        except ftplib.error_temp,v:
+            self.debug( "ProFTPd replies with 450, not 550... sucker..." )
+            fichiers_distants =  []
         dfichiers = {}
         for x in fichiers_distants:
             dfichiers[x] = 1

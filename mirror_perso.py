@@ -58,21 +58,29 @@ class Mirroir (FTP):
         self.setSymlinks()
         self._paths = [ "/" ]
         self._use_regexp = 0
-
+        self._regexp_list = []
+        
         self._dry_run = dry_run
         
     def setSymlinks( self, follow = 0 ):
         self.follow_symlinks = follow
 
-    def setRegexp( self, regexp ):
+    def pushRegexp( self, regexp ):
         self._use_regexp = 1
-        self._regexp = re.compile( regexp )
+        self._regexp_list.append( re.compile( regexp ) )
 
     def debug( self, text ):
         if self.debugging:
             print text
         else:
             pass
+
+    def _matchOneRegexp( self, path ):
+        if self._use_regexp:
+            for regxp in self._regexp_list:
+                if regxp.match( path ):
+                    return 1
+        return 0
 
     def __mets_a_jour(self,fich):
         self.debug( "Sending %s" % fich )
@@ -100,9 +108,9 @@ class Mirroir (FTP):
             self.debug( "Skipped %s: not following hidden files/directorties"
                         % filename )
             return
-        elif self._use_regexp and self._regexp.match(
-            self._paths[-1] + filename ):
+        elif self._matchOneRegexp( self._paths[-1] + filename ):
             self.debug( "Regexp matched %s, skipping it" % filename )
+            return
 
         if stat.S_ISLNK( sf[ stat.ST_MODE ] ):
             if self.follow_symlinks:
@@ -144,7 +152,7 @@ class Mirroir (FTP):
         self._paths.append( self._paths[-1] + dir + "/" )
 
 #        print self._paths[-1]
-        if self._use_regexp and self._regexp.match( self._paths[-1] ):
+        if self._matchOneRegexp( self._paths[-1] ):
             self.debug( "Regexp matched %s, skipping it" % dir )
             self._paths.pop()
             return
@@ -174,6 +182,11 @@ class Mirroir (FTP):
         return
 
     def supprime(self,cible):
+        cwd = self._paths[-1]
+        if ( self._matchOneRegexp( cwd + cible ) or
+             self._matchOneRegexp( cwd + cible + "/" ) ):
+            self.debug( "Regexp matched %s, skipping it" % cible )
+            return
         try:
             self.cwd(cible)
         except ftplib.error_perm,msg:
@@ -246,7 +259,7 @@ def lmain():
     clean = 0
     follow_symlinks = 0
     passive_mode = 0
-    regexp = ''
+    regexp = []
     
     for t in opts:
         # option de debug
@@ -275,7 +288,7 @@ def lmain():
         elif t[0] == "-p":
             passive_mode = 1
         elif t[0] == "-e":
-            regexp = t[1]
+            regexp.append( t[1] )
         elif t[0] == "-n":
             dry = 1
 	else:
@@ -296,7 +309,8 @@ def lmain():
     mirroir = Mirroir( host, dlevel, dry )
     mirroir.set_pasv( passive_mode )
     if regexp != '':
-        mirroir.setRegexp( regexp )
+        for regxp in regexp:
+            mirroir.pushRegexp( regxp )
     if remote != '':
 	mirroir.cwd(remote)
 

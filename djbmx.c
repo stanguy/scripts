@@ -1,3 +1,8 @@
+/* @(#)djbmx.c
+ * Author: Sebastien Tanguy <seb+scripts@death-gate.fr.eu.org>
+ * Version: $Id$
+ */
+
 
 #include <stdio.h>
 #include <unistd.h>
@@ -41,6 +46,13 @@ int main( int argc, char* argv [] )
 {
     mx_list_t mx_list;
 
+    if ( argc != 2 ) {
+        fprintf( stderr, "Wrong number of arguments.\n" );
+        fprintf( stderr, "Usage:\n" );
+        fprintf( stderr, "\t%s {domainname}\n", argv[ 0 ] );
+        return -1;
+    }
+    
     mx_list_init( &mx_list );
 
     // look up DNS records

@@ -3,6 +3,20 @@
  * Version: $Id$
  */
 
+/*
+*** Call Tree:
+ * main 
+ *   mx_list_init 
+ *   mx_list_fill
+ *     mx_list_fill_name
+ *       mx_list_add_ip
+ *   mx_list_test_them
+ *     sw_init
+ *       _create_socket
+ *     sw_select
+ *   mx_list_clear
+***
+ */
 
 #include <stdio.h>
 #include <unistd.h>
@@ -149,45 +163,69 @@ void mx_list_add_ip( mx_list_t* ml, const char* ip )
 int _create_socket( gpointer* );
 
 
+typedef struct {
+    int max_socket;
+    fd_set readset;
+    int waiting_sockets;
+    int* socket_list;
+} socket_work ;
+
+
+void sw_init( socket_work* , mx_list_t* );
+int sw_select( socket_work* );
+
 void mx_list_test_them( mx_list_t* ml )
 {
-    GList* iter;
-    int max_socket = -1 ;
-    fd_set readset, tempset;
-    int waiting_sockets = 0;
     int i;
+    socket_work sw;
+    sw.max_socket = -1;
+    sw.waiting_sockets = 0;
     // keep an  array of all our sockets  so that we can  close all of
     // them if we timeout
-    int* socket_list = malloc( sizeof( int ) * g_list_length( ml->mxs ) );
+    sw.socket_list = malloc( sizeof( int ) * g_list_length( ml->mxs ) );
     
-    FD_ZERO(&readset);
+    FD_ZERO(&sw.readset);
 
+    sw_init( &sw, ml );
+    ml->mx_ok = sw_select( &sw );
+
+    // close (eventual) remaining sockets
+    for ( i = 0 ; i <= sw.max_socket ; ++i ) {
+        if ( sw.socket_list[ i ] > 0 ) {
+            close( sw.socket_list[ i ] );
+        }
+    }
+    
+    free( sw.socket_list );
+}
+
+void sw_init( socket_work* sw, mx_list_t* ml)
+{
+    GList* iter;
+    struct sockaddr_in sin;
+    sin.sin_port = htons( 25 );
+    sin.sin_family = AF_INET;
+    bzero(&sin.sin_zero, sizeof(sin.sin_zero));
 
     for ( iter = g_list_first( ml->mxs ) ;
           NULL != iter ;
           iter = g_list_next( iter ) ) {
+        int cret ;
         int sock = _create_socket( iter->data );
-
         // at this point, we have a non-blocking socket ready to use
         
         struct in_addr* in = (struct in_addr*)(iter->data);
-        struct sockaddr_in sin;
-        int cret ;
-        
-        sin.sin_port = htons( 25 );
         sin.sin_addr.s_addr = in->s_addr;
-        sin.sin_family = AF_INET;
-        bzero(&sin.sin_zero, sizeof(sin.sin_zero));
 
         cret = connect( sock, (struct sockaddr*)&sin, sizeof(sin) ) ;
 
         if ( ( -1 == cret ) && ( EINPROGRESS == errno ) ) {
             // connection is happening in the background
             // prepare this socket for select
-            FD_SET( sock, &readset );
-            max_socket = MAX( sock, max_socket );
-            socket_list[ waiting_sockets ] = sock;
-            waiting_sockets++;
+            FD_SET( sock, &sw->readset );
+            sw->max_socket = MAX( sock, sw->max_socket );
+            sw->socket_list[ sw->waiting_sockets ] = sock;
+            sw->waiting_sockets++;
         } else if ( cret == 0 ) {
             // connection already successful
             ml->mx_ok++;
@@ -197,16 +235,23 @@ void mx_list_test_them( mx_list_t* ml )
         }
     }
 
-    while ( waiting_sockets > 0 ) {
+}
+
+int sw_select( socket_work* sw )
+{
+    fd_set tempset;
+    int mx_ok = 0;
+    struct timeval ts;
+
+    while ( sw->waiting_sockets > 0 ) {
         int res;
-        struct timeval ts;
         // initialize the timeout, since Linux could mess with it
         ts.tv_sec = 3;
         ts.tv_usec = 0;
         // Copy readset into the temporary set
-        memcpy( &tempset, &readset, sizeof( readset ) );
-
-        res = select( max_socket+1, &tempset, NULL, NULL, &ts );
+        memcpy( &tempset, &sw->readset, sizeof( sw->readset ) );
+        
+        res = select( sw->max_socket+1, &tempset, NULL, NULL, &ts );
         if ( res < 0 ) {
             fprintf( stderr, "Error on select()\n" );
             break;
@@ -214,8 +259,9 @@ void mx_list_test_them( mx_list_t* ml )
             // timeout
             break;
         } else {
+            int i;
             // now, try to find which socket did wake us up
-            for ( i = 0 ; i <= max_socket ; ++i ) {
+            for ( i = 0 ; i <= sw->max_socket ; ++i ) {
                 if ( FD_ISSET( i, &tempset ) ){
                     // this one has something to say
                     char code[4];
@@ -228,27 +274,21 @@ void mx_list_test_them( mx_list_t* ml )
                         code[3] = 0;
                         if ( mx_debug_mode )
                             printf( "Code: %s\n", code );
-                        ml->mx_ok++;
+                        mx_ok++;
                     }
                     // anyway, we don't need this socket anymore
-                    waiting_sockets--;
+                    sw->waiting_sockets--;
+                    sw->socket_list[ i ] = -1 ;
+                    FD_CLR( i, &sw->readset );
                     close( i );
-                    socket_list[ i ] = -1 ;
-                    FD_CLR( i, &readset );
                 }
             }
         }           
     }
-
-    // close (eventual) remaining sockets
-    for ( i = 0 ; i <= max_socket ; ++i ) {
-        if ( socket_list[ i ] > 0 ) {
-            close( socket_list[ i ] );
-        }
-    }
-    
-    free( socket_list );
+    return mx_ok;
 }
+
+
 
 int _create_socket( gpointer* data )
 {

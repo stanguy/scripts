@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # mirror_perso.py 
+# $Id$
 # Copyright (c) 1998-2002 Sebastien Tanguy 
 #
 # Ce programme est un logiciel libre ; vous pouvez le modifier et/ou
@@ -24,36 +25,36 @@ def isolder(lt,rg):
         lt = lt[1:]
     
     if lv != dtr[0]:
-	return lv < dtr[0]
+        return lv < dtr[0]
     # mois
     lv = int(lt[4:6])
     if lv != dtr[1]:
-	return lv < dtr[1]
+        return lv < dtr[1]
     # jour
     lv = int(lt[6:8])
     if lv != dtr[2]:
-	return lv < dtr[2]
+        return lv < dtr[2]
     # heure
     lv = int(lt[8:10])
     if lv != dtr[3]:
-	return lv < dtr[3]
+        return lv < dtr[3]
     # minute
     lv = int(lt[10:12])
     if lv != dtr[4]:
-	return lv < dtr[4]
+        return lv < dtr[4]
     # seconde
     lv = int(lt[12:14])
     if lv != dtr[5]:
-	return lv < dtr[5]
+        return lv < dtr[5]
     return 0
 
 class Mirroir (FTP):
     def __init__(self,hote,debug):
-	FTP.__init__(self,hote)
-	self.set_debuglevel(debug)
-	netrc = ftplib.Netrc()
-	uid,passwd,acct = netrc.get_account(hote)
-	self.login(uid,passwd,acct)
+        FTP.__init__(self,hote)
+        self.set_debuglevel(debug)
+        netrc = ftplib.Netrc()
+        uid,passwd,acct = netrc.get_account(hote)
+        self.login(uid,passwd,acct)
         self.setSymlinks()
         
     def setSymlinks( self, follow = 0 ):
@@ -66,22 +67,22 @@ class Mirroir (FTP):
             pass
 
     def __mets_a_jour(self,fich):
-	self.debug( "Sending %s" % fich )
-	try:
-	    self.storbinary("STOR "
-			    + fich,open(fich,'r'),1024)
-	except ftplib.error_perm:
-	    self.debug( "Error while sending %s " % fich )
+        self.debug( "Sending %s" % fich )
+        try:
+            self.storbinary("STOR "
+                            + fich,open(fich,'r'),1024)
+        except ftplib.error_perm:
+            self.debug( "Error while sending %s " % fich )
 
     def __verifie(self,fich):
-	try:
-	    resp = self.sendcmd("MDTM "+fich)
-	except ftplib.error_perm,v:
-	    self.__mets_a_jour(fich)
-	else:
-	    rfcdate = split(resp)[1]
-	    if isolder(rfcdate,fich):
-		self.__mets_a_jour(fich)
+        try:
+            resp = self.sendcmd("MDTM "+fich)
+        except ftplib.error_perm,v:
+            self.__mets_a_jour(fich)
+        else:
+            rfcdate = split(resp)[1]
+            if isolder(rfcdate,fich):
+                self.__mets_a_jour(fich)
 
     def __doFile( self, filename ):
         # on ne suit pas les liens ou les fichiers/réps cachés
@@ -118,7 +119,7 @@ class Mirroir (FTP):
         dfichiers = {}
         for x in fichiers_distants:
             dfichiers[x] = 1
-	for fich in os.listdir(os.curdir):
+        for fich in os.listdir(os.curdir):
             self.__doFile( fich )
             dfichiers[fich] = 0
         for x in dfichiers.keys():
@@ -127,29 +128,29 @@ class Mirroir (FTP):
                 self.supprime(x)
 
     def parcours_dir(self,dir):
-	self.debug( "+++ cd %s" % dir )
-	olddir= os.getcwd()
-	os.chdir(dir)
-	excraised = 1
-	while excraised:
-	    try:
-		self.cwd(dir)
-	    except ftplib.error_perm,msg:
-		self.voidcmd("MKD "+dir)
-		continue
-	    else:
-		excraised = 0
-	    self.parcours()
-	    os.chdir(olddir)
-	    self.voidcmd("CDUP")
-	    self.debug( "+++ cdup : %s" % self.pwd() )
+        self.debug( "+++ cd %s" % dir )
+        olddir= os.getcwd()
+        os.chdir(dir)
+        excraised = 1
+        while excraised:
+            try:
+                self.cwd(dir)
+            except ftplib.error_perm,msg:
+                self.voidcmd("MKD "+dir)
+                continue
+            else:
+                excraised = 0
+            self.parcours()
+            os.chdir(olddir)
+            self.voidcmd("CDUP")
+            self.debug( "+++ cdup : %s" % self.pwd() )
 
     def supprime_fichier(self,fich):
-	try:
-	    self.delete(fich)
-	except ftplib.error_perm,msg:
-	    self.debug( "Error removing %s" % fich )
-	return
+        try:
+            self.delete(fich)
+        except ftplib.error_perm,msg:
+            self.debug( "Error removing %s" % fich )
+        return
 
     def supprime(self,cible):
         try:
@@ -165,21 +166,22 @@ class Mirroir (FTP):
             self.rmd( cible )
 
     def clean(self):
-	try:
-	    lst = self.nlst()
-	except ftplib.error_perm,msg:
-	    return
-	for fich in lst:
+        try:
+            lst = self.nlst()
+        except ftplib.error_perm,msg:
+            return
+        for fich in lst:
             self.supprime(fich)
-	return
-	
+        return
+        
     def __del__(self):
-	self.debug( "Closing ftp" )
-#	self.quit()
+        self.debug( "Closing ftp" )
+#       self.quit()
 #       ftp.close()
 
 
 # fin de Mirroir
+
 
 def erreur_args(s):
     print s
@@ -198,25 +200,25 @@ def lmain():
     
     for t in opts:
         # option de debug
-	if t[0] == '-d':
-	    dlevel = dlevel +1
+        if t[0] == '-d':
+            dlevel = dlevel +1
         # -h <hostname>  nom du serveur
-	elif t[0] == '-h':
-	    if host != '':
-		erreur_args("Only one host at a time")
-	    host = t[1]
+        elif t[0] == '-h':
+            if host != '':
+                erreur_args("Only one host at a time")
+            host = t[1]
         # -f <dir_html>  répertoire d'origine des fichiers
-	elif t[0] == '-f':
-	    if orig != '':
-		erreur_args("Only one source repository at a time")
-	    orig = t[1]
+        elif t[0] == '-f':
+            if orig != '':
+                erreur_args("Only one source repository at a time")
+            orig = t[1]
         # suppression des fichiers distants
-	elif t[0] == "-c":
-	    clean = 1
+        elif t[0] == "-c":
+            clean = 1
         # -r <dir_distant> répertoire où se placer sur le serveur
-	elif t[0] == "-r":
-	    if remote != '':
-		erreur_args("Only one remote directory")
+        elif t[0] == "-r":
+            if remote != '':
+                erreur_args("Only one remote directory")
 	    remote = t[1]
         elif t[0] == "-s":
             follow_symlinks = 1

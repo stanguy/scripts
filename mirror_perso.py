@@ -54,13 +54,19 @@ class Mirroir (FTP):
 	netrc = ftplib.Netrc()
 	uid,passwd,acct = netrc.get_account(hote)
 	self.login(uid,passwd,acct)
-
+        self.setSymlinks()
+        
     def setSymlinks( self, follow = 0 ):
         self.follow_symlinks = follow
 
+    def debug( self, text ):
+        if self.debugging:
+            print text
+        else:
+            pass
+
     def __mets_a_jour(self,fich):
-	if self.debugging:
-	    print "Envoi du fichier ", fich
+	self.debug( "Envoi du fichier %s" % fich )
 	try:
 	    self.storbinary("STOR "
 			    + fich,open(fich,'r'),1024)
@@ -81,27 +87,24 @@ class Mirroir (FTP):
         # on ne suit pas les liens ou les fichiers/réps cachés
         sf = os.lstat( filename )
         if (filename[0] == '.'):
-            if self.debugging:
-                print "On passe ",filename," pour racisme"
+            self.debug( "On passe %s pour racisme" % filename )
             return
 
         if stat.S_ISLNK( sf[ stat.ST_MODE ] ):
             if self.follow_symlinks:
-                print "Woooh, un lien à suivre ! (", filename, ")"
                 try:
                     sf = os.stat( filename )
                 except OSError:
-                    if self.debugging:
-                        print filename, " Doesn't point to anything?"
+                    self.debug( "%s doesn't point to anything?" % filename )
                     return
+            else:
+                return
 
         if stat.S_ISDIR( sf[ stat.ST_MODE ] ):
-            if self.debugging:
-                print filename," est un répertoire"
+            self.debug( "%s est un répertoire" % filename )
             self.parcours_dir( filename )
         elif stat.S_ISREG( sf[ stat.ST_MODE ] ):
-            if self.debugging:
-                print filename," est un fichier"
+            self.debug( "%s est un fichier" % filename )
             self.__verifie(filename)
         else:
             print filename," pose problème *****"
@@ -119,13 +122,11 @@ class Mirroir (FTP):
             dfichiers[fich] = 0
         for x in dfichiers.keys():
             if dfichiers[x]:
-                if self.debugging:
-                    print "Destruction de ",x
+                self.debug( "Destruction de %s" % x )
                 self.supprime(x)
 
     def parcours_dir(self,dir):
-	if self.debugging:
-	    print "+++ cd ",dir
+	self.debug( "+++ cd %s" % dir )
 	olddir= os.getcwd()
 	os.chdir(dir)
 	excraised = 1
@@ -140,31 +141,27 @@ class Mirroir (FTP):
 	    self.parcours()
 	    os.chdir(olddir)
 	    self.voidcmd("CDUP")
-	    if self.debugging:
-		print "+++ cdup : %s" % self.pwd()
+	    self.debug( "+++ cdup : %s" % self.pwd() )
 
     def supprime_fichier(self,fich):
 	try:
 	    self.delete(fich)
 	except ftplib.error_perm,msg:
-	    if self.debugging:
-		print "Erreur pour ",fich
+	    self.debug( "Erreur pour %s" % fich )
 	return
 
     def supprime(self,cible):
         try:
             self.cwd(cible)
         except ftplib.error_perm,msg:
-            if self.debugging:
-                print "Destruction de ",cible
+            self.debug( "Destruction de %s" % cible )
             self.supprime_fichier(cible)
         else:
-            if self.debugging:
-                print "Nettoyage de ",cible
+            self.debug( "Nettoyage de %s" % cible )
             # on a réussi à se placer dans le rép à supprimer
             self.clean()
             self.voidcmd("CDUP")
-            self.supprime_fichier(cible)
+            self.rmd( cible )
 
     def clean(self):
 	try:
@@ -176,8 +173,7 @@ class Mirroir (FTP):
 	return
 	
     def __del__(self):
-	if self.debugging:
-	    print "Closing ftp"
+	self.debug( "Closing ftp" )
 #	self.quit()
 #       ftp.close()
 
@@ -189,7 +185,7 @@ def erreur_args(s):
     sys.exit(1)
 
 def lmain():
-    opts, args = getopt.getopt(sys.argv[1:],'dh:f:cr:s')
+    opts, args = getopt.getopt(sys.argv[1:],'dh:f:cr:sp')
     
     dlevel = 0
     host = ''
@@ -197,6 +193,7 @@ def lmain():
     remote = ''
     clean = 0
     follow_symlinks = 0
+    passive_mode = 0
     
     for t in opts:
         # option de debug
@@ -222,6 +219,8 @@ def lmain():
 	    remote = t[1]
         elif t[0] == "-s":
             follow_symlinks = 1
+        elif t[0] == "-p":
+            passive_mode = 1
 	else:
 	    erreur_args("Argument inconnu : %s" % t[0])
 
@@ -230,7 +229,7 @@ def lmain():
 	orig = os.environ['HOME']+"/public_html"
 	
     if host == '':
-	host = 'perso-ftp.wanadoo.fr'
+	erreur_args( "No host specified" )
 
     os.chdir(orig)
 
@@ -238,6 +237,7 @@ def lmain():
 	print host
 	
     mirroir = Mirroir(host,dlevel)
+    mirroir.set_pasv( passive_mode )
     if remote != '':
 	mirroir.cwd(remote)
 

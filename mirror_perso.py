@@ -66,12 +66,12 @@ class Mirroir (FTP):
             pass
 
     def __mets_a_jour(self,fich):
-	self.debug( "Envoi du fichier %s" % fich )
+	self.debug( "Sending %s" % fich )
 	try:
 	    self.storbinary("STOR "
 			    + fich,open(fich,'r'),1024)
 	except ftplib.error_perm:
-	    print "Erreur d'envoi de ", fich
+	    self.debug( "Error while sending %s " % fich )
 
     def __verifie(self,fich):
 	try:
@@ -87,7 +87,8 @@ class Mirroir (FTP):
         # on ne suit pas les liens ou les fichiers/réps cachés
         sf = os.lstat( filename )
         if (filename[0] == '.'):
-            self.debug( "On passe %s pour racisme" % filename )
+            self.debug( "Skipped %s: not following hidden files/directorties"
+                        % filename )
             return
 
         if stat.S_ISLNK( sf[ stat.ST_MODE ] ):
@@ -101,13 +102,13 @@ class Mirroir (FTP):
                 return
 
         if stat.S_ISDIR( sf[ stat.ST_MODE ] ):
-            self.debug( "%s est un répertoire" % filename )
+            self.debug( "%s is a directory" % filename )
             self.parcours_dir( filename )
         elif stat.S_ISREG( sf[ stat.ST_MODE ] ):
-            self.debug( "%s est un fichier" % filename )
+            self.debug( "%s is a regular file" % filename )
             self.__verifie(filename)
         else:
-            print filename," pose problème *****"
+            self.debug( "We don't know how to handle %s" % filename )
 
     def parcours(self):
         try:
@@ -122,7 +123,7 @@ class Mirroir (FTP):
             dfichiers[fich] = 0
         for x in dfichiers.keys():
             if dfichiers[x]:
-                self.debug( "Destruction de %s" % x )
+                self.debug( "Removing %s" % x )
                 self.supprime(x)
 
     def parcours_dir(self,dir):
@@ -147,17 +148,17 @@ class Mirroir (FTP):
 	try:
 	    self.delete(fich)
 	except ftplib.error_perm,msg:
-	    self.debug( "Erreur pour %s" % fich )
+	    self.debug( "Error removing %s" % fich )
 	return
 
     def supprime(self,cible):
         try:
             self.cwd(cible)
         except ftplib.error_perm,msg:
-            self.debug( "Destruction de %s" % cible )
+            self.debug( "Removing %s" % cible )
             self.supprime_fichier(cible)
         else:
-            self.debug( "Nettoyage de %s" % cible )
+            self.debug( "Cleaning up %s" % cible )
             # on a réussi à se placer dans le rép à supprimer
             self.clean()
             self.voidcmd("CDUP")
@@ -202,12 +203,12 @@ def lmain():
         # -h <hostname>  nom du serveur
 	elif t[0] == '-h':
 	    if host != '':
-		erreur_args("un seul hôte à la fois, svp")
+		erreur_args("Only one host at a time")
 	    host = t[1]
         # -f <dir_html>  répertoire d'origine des fichiers
 	elif t[0] == '-f':
 	    if orig != '':
-		erreur_args("une seule origine à la fois, svp")
+		erreur_args("Only one source repository at a time")
 	    orig = t[1]
         # suppression des fichiers distants
 	elif t[0] == "-c":
@@ -215,14 +216,14 @@ def lmain():
         # -r <dir_distant> répertoire où se placer sur le serveur
 	elif t[0] == "-r":
 	    if remote != '':
-		erreur_args("Un seul répertoire distant à la fois, merci")
+		erreur_args("Only one remote directory")
 	    remote = t[1]
         elif t[0] == "-s":
             follow_symlinks = 1
         elif t[0] == "-p":
             passive_mode = 1
 	else:
-	    erreur_args("Argument inconnu : %s" % t[0])
+	    erreur_args("Unknown option : %s" % t[0])
 
 
     if orig == '':

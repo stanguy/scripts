@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: ISO-8859-1 -*-
 # mirror_perso.py 
 # $Id$
 # Copyright (c) 1998-2002 Sebastien Tanguy 

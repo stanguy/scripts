@@ -207,6 +207,9 @@ class Mirroir (FTP):
             lst = self.nlst()
         except ftplib.error_perm,msg:
             return
+        except ftplib.error_temp,v:
+            self.debug( "ProFTPd replies with 450, not 550... sucker..." )
+            return
         for fich in lst:
             self.supprime(fich)
         return

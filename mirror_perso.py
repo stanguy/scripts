@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # mirror_perso.py 
-# Copyright (c) 1998-2000 Sebastien Tanguy 
+# Copyright (c) 1998-2002 Sebastien Tanguy 
 #
 # Ce programme est un logiciel libre ; vous pouvez le modifier et/ou
 # le redistribuer sous les termes de la GNU GPL v2+ Ce programme est
@@ -9,7 +9,7 @@
 
 from ftplib import FTP
 from string import split
-import getopt,sys,ftplib,os,time
+import getopt,sys,ftplib,os,time,stat
 import exceptions
 
 #on passe une chaine de date et le nom du fichier
@@ -76,7 +76,36 @@ class Mirroir (FTP):
 	    rfcdate = split(resp)[1]
 	    if isolder(rfcdate,fich):
 		self.__mets_a_jour(fich)
-		
+
+    def __doFile( self, filename ):
+        # on ne suit pas les liens ou les fichiers/réps cachés
+        sf = os.lstat( filename )
+        if (filename[0] == '.'):
+            if self.debugging:
+                print "On passe ",filename," pour racisme"
+            return
+
+        if stat.S_ISLNK( sf[ stat.ST_MODE ] ):
+            if self.follow_symlinks:
+                print "Woooh, un lien à suivre ! (", filename, ")"
+                try:
+                    sf = os.stat( filename )
+                except OSError:
+                    if self.debugging:
+                        print filename, " Doesn't point to anything?"
+                    return
+
+        if stat.S_ISDIR( sf[ stat.ST_MODE ] ):
+            if self.debugging:
+                print filename," est un répertoire"
+            self.parcours_dir( filename )
+        elif stat.S_ISREG( sf[ stat.ST_MODE ] ):
+            if self.debugging:
+                print filename," est un fichier"
+            self.__verifie(filename)
+        else:
+            print filename," pose problème *****"
+
     def parcours(self):
         try:
             fichiers_distants = self.nlst()
@@ -86,23 +115,7 @@ class Mirroir (FTP):
         for x in fichiers_distants:
             dfichiers[x] = 1
 	for fich in os.listdir(os.curdir):
-            # on ne suit pas les liens ou les fichiers/réps cachés
-	    if (fich[0] == '.'):
-		if self.debugging:
-		    print "On passe ",fich," pour racisme"
-            elif os.path.islink(fich):
-                if self.follow_symlinks:
-                    print "Woooh, un lien à suivre ! (", fich, ")"
-	    elif os.path.isdir(fich):
-		if self.debugging:
-		    print fich," est un répertoire"
-		self.parcours_dir(fich)
-	    elif os.path.isfile(fich):
-		if self.debugging:
-		    print fich," est un fichier"
-		self.__verifie(fich)
-	    else:
-		print fich," pose problème *****"
+            self.__doFile( fich )
             dfichiers[fich] = 0
         for x in dfichiers.keys():
             if dfichiers[x]:

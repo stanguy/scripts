@@ -187,6 +187,9 @@ class Mirroir (FTP):
 
     def supprime(self,cible):
         cwd = self._paths[-1]
+        if cible[0] == '.' :
+            self.debug( "Skipping hidden file: " + cible )
+            return
         if ( self._matchOneRegexp( cwd + cible ) or
              self._matchOneRegexp( cwd + cible + "/" ) ):
             self.debug( "Regexp matched %s, skipping it" % cible )

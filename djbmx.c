@@ -4,6 +4,11 @@
  */
 
 /*
+ * You can redistribute and/or modify this software under the terms of
+ * the GNU General Public License v2.
+ */
+
+/*
 *** Call Tree:
  * main 
  *   mx_list_init 

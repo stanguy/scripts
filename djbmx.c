@@ -149,13 +149,27 @@ void mx_list_fill_name( mx_list_t* ml, const char* host )
     }
 }
 
+int compare_in_addr( const void* lhs_, const void* rhs_ )
+{
+    const struct in_addr* lhs = (const struct in_addr*)lhs_;
+    const struct in_addr* rhs = (const struct in_addr*)rhs_;
+    if ( lhs->s_addr == rhs->s_addr ) {
+        return 0;
+    }
+    return 1;
+}
+    
 
 void mx_list_add_ip( mx_list_t* ml, const char* ip )
 {
     struct in_addr* in = malloc( sizeof( struct in_addr ) );
     if ( 0 != inet_aton( ip, in ) ) {
-        ml->mxs = g_list_prepend( ml->mxs, in );
-        ml->mx_total++;
+        if ( ! g_list_find_custom( ml->mxs, in, compare_in_addr ) ) {
+            ml->mxs = g_list_prepend( ml->mxs, in );
+            ml->mx_total++;
+        } else {
+            free( in );
+        }
     }
 }
 

@@ -11,7 +11,7 @@
 from ftplib import FTP
 from string import split
 import getopt,sys,ftplib,os,time,stat
-import exceptions
+import exceptions, re
 
 #on passe une chaine de date et le nom du fichier
 def isolder(lt,rg):
@@ -49,16 +49,24 @@ def isolder(lt,rg):
     return 0
 
 class Mirroir (FTP):
-    def __init__(self,hote,debug):
+    def __init__(self,hote,debug,dry_run = 0):
         FTP.__init__(self,hote)
         self.set_debuglevel(debug)
         netrc = ftplib.Netrc()
         uid,passwd,acct = netrc.get_account(hote)
         self.login(uid,passwd,acct)
         self.setSymlinks()
+        self._paths = [ "/" ]
+        self._use_regexp = 0
+
+        self._dry_run = dry_run
         
     def setSymlinks( self, follow = 0 ):
         self.follow_symlinks = follow
+
+    def setRegexp( self, regexp ):
+        self._use_regexp = 1
+        self._regexp = re.compile( regexp )
 
     def debug( self, text ):
         if self.debugging:
@@ -87,10 +95,14 @@ class Mirroir (FTP):
     def __doFile( self, filename ):
         # on ne suit pas les liens ou les fichiers/réps cachés
         sf = os.lstat( filename )
+#        print self._paths[-1] + filename
         if (filename[0] == '.'):
             self.debug( "Skipped %s: not following hidden files/directorties"
                         % filename )
             return
+        elif self._use_regexp and self._regexp.match(
+            self._paths[-1] + filename ):
+            self.debug( "Regexp matched %s, skipping it" % filename )
 
         if stat.S_ISLNK( sf[ stat.ST_MODE ] ):
             if self.follow_symlinks:
@@ -129,6 +141,14 @@ class Mirroir (FTP):
 
     def parcours_dir(self,dir):
         self.debug( "+++ cd %s" % dir )
+        self._paths.append( self._paths[-1] + dir + "/" )
+
+#        print self._paths[-1]
+        if self._use_regexp and self._regexp.match( self._paths[-1] ):
+            self.debug( "Regexp matched %s, skipping it" % dir )
+            self._paths.pop()
+            return
+        
         olddir= os.getcwd()
         os.chdir(dir)
         excraised = 1
@@ -144,6 +164,7 @@ class Mirroir (FTP):
             os.chdir(olddir)
             self.voidcmd("CDUP")
             self.debug( "+++ cdup : %s" % self.pwd() )
+        self._paths.pop()
 
     def supprime_fichier(self,fich):
         try:
@@ -173,6 +194,14 @@ class Mirroir (FTP):
         for fich in lst:
             self.supprime(fich)
         return
+
+    def rmd( self, target ):
+        if not self._dry_run:
+            FTP.rmd( self, target )
+
+    def delete( target ):
+        if not self._dry_run:
+            FTP.delete( self, target )
         
     def __del__(self):
         self.debug( "Closing ftp" )
@@ -185,18 +214,39 @@ class Mirroir (FTP):
 
 def erreur_args(s):
     print s
+    print """Usage:
+%s {-h host}
+     [ -d ]
+     [ -f local_dir ]
+     [ -r remote_dir ]
+     [ -e regexp ]
+     [ -c ]
+     [ -s ]
+     [ -p ]
+     [ -n ] 
+
+  -h host : FTP server hostname
+  -f local_dir : path to the local directory (defaults to: ~/public_html)
+  -r remote_dir : path to the remote directory (defaults to none)
+  -e regexp : exclude files or directories matching regexp
+  -c : clean remote directory (dangerous!)
+  -s : follow symlinks (defaults to: no)
+  -p : passive FTP mode (defaults to: no)
+  -n : no action, dry run mode """ % os.path.basename( sys.argv[ 0 ] )
     sys.exit(1)
 
 def lmain():
-    opts, args = getopt.getopt(sys.argv[1:],'dh:f:cr:sp')
+    opts, args = getopt.getopt(sys.argv[1:],'cde:f:h:npr:s')
     
     dlevel = 0
+    dry = 0
     host = ''
     orig = ''
     remote = ''
     clean = 0
     follow_symlinks = 0
     passive_mode = 0
+    regexp = ''
     
     for t in opts:
         # option de debug
@@ -224,6 +274,10 @@ def lmain():
             follow_symlinks = 1
         elif t[0] == "-p":
             passive_mode = 1
+        elif t[0] == "-e":
+            regexp = t[1]
+        elif t[0] == "-n":
+            dry = 1
 	else:
 	    erreur_args("Unknown option : %s" % t[0])
 
@@ -239,8 +293,10 @@ def lmain():
     if dlevel:
 	print host
 	
-    mirroir = Mirroir(host,dlevel)
+    mirroir = Mirroir( host, dlevel, dry )
     mirroir.set_pasv( passive_mode )
+    if regexp != '':
+        mirroir.setRegexp( regexp )
     if remote != '':
 	mirroir.cwd(remote)
 

@@ -33,6 +33,7 @@ void mx_list_fill( mx_list_t*, const char* );
 void mx_list_fill_name( mx_list_t* , const char* );
 void mx_list_add_ip( mx_list_t* , const char* );
 void mx_list_test_them( mx_list_t* );
+void mx_list_clear( mx_list_t* );
 
 uchar_t mx_debug_mode = 0;
 
@@ -42,12 +43,15 @@ int main( int argc, char* argv [] )
 
     mx_list_init( &mx_list );
 
+    // look up DNS records
     mx_list_fill( &mx_list, argv[ 1 ] );
+    // now, try those servers
     mx_list_test_them( &mx_list );
     
     printf( "Total MX : %d\n", mx_list.mx_total );
     printf( "MX up    : %d\n", mx_list.mx_ok );
     
+    mx_list_clear( &mx_list );
     return 0;
 }
 
@@ -64,11 +68,15 @@ void mx_list_fill( mx_list_t* ml, const char* domain )
     stralloc mxs = { 0 };
     stralloc host = { 0 };
     char* current;
+
+    // create the "djb-string" and look up the MX servers
     stralloc_copys( &host, domain );
     if ( 0 != dns_mx( &mxs, &host ) ) {
         fprintf( stderr, "Error resolving\n" );
         exit( -1 );
     }
+
+    // now, for each MX, we resolve the hostname
     current = mxs.s;
     while ( current < ( mxs.s + mxs.len ) ) {
         int weight = 255 * current[ 0 ] + current[ 1 ];
@@ -79,6 +87,7 @@ void mx_list_fill( mx_list_t* ml, const char* domain )
                      domain,
                      weight,
                      current );
+        // we have one hostname, look that up
         mx_list_fill_name( ml, current );
         while ( *current != 0 )
             current++;
@@ -96,8 +105,10 @@ void mx_list_fill_name( mx_list_t* ml, const char* host )
     
     stralloc_copys( &shost, host );
 
+    // do the lookup
     dns_ip4( &out, &shost );
-    
+
+    // for each entry, rebuild the IP address
     i = 0;
     xtra = (uchar_t*)out.s;
     while ( i  < out.len ) {
@@ -106,6 +117,7 @@ void mx_list_fill_name( mx_list_t* ml, const char* host )
                   (uint16)  xtra[i+1],
                   (uint16)  xtra[i+2],
                   (uint16)  xtra[i+3] );
+        // and add it to the list
         mx_list_add_ip( ml, ip );
         i += 4;
     }
@@ -132,6 +144,8 @@ void mx_list_test_them( mx_list_t* ml )
     fd_set readset, tempset;
     int waiting_sockets = 0;
     int i;
+    // keep an  array of all our sockets  so that we can  close all of
+    // them if we timeout
     int* socket_list = malloc( sizeof( int ) * g_list_length( ml->mxs ) );
     
     FD_ZERO(&readset);
@@ -142,6 +156,8 @@ void mx_list_test_them( mx_list_t* ml )
           iter = g_list_next( iter ) ) {
         int sock = _create_socket( iter->data );
 
+        // at this point, we have a non-blocking socket ready to use
+        
         struct in_addr* in = (struct in_addr*)(iter->data);
         struct sockaddr_in sin;
         int cret ;
@@ -172,10 +188,12 @@ void mx_list_test_them( mx_list_t* ml )
     while ( waiting_sockets > 0 ) {
         int res;
         struct timeval ts;
+        // initialize the timeout, since Linux could mess with it
         ts.tv_sec = 3;
         ts.tv_usec = 0;
         // Copy readset into the temporary set
         memcpy( &tempset, &readset, sizeof( readset ) );
+
         res = select( max_socket+1, &tempset, NULL, NULL, &ts );
         if ( res < 0 ) {
             fprintf( stderr, "Error on select()\n" );
@@ -184,28 +202,33 @@ void mx_list_test_them( mx_list_t* ml )
             // timeout
             break;
         } else {
+            // now, try to find which socket did wake us up
             for ( i = 0 ; i <= max_socket ; ++i ) {
                 if ( FD_ISSET( i, &tempset ) ){
+                    // this one has something to say
                     char code[4];
+                    // try  to read  something (this  will  trigger an
+                    // error if the socket could not connect
                     res = read( i, code, 3 );
                     if ( res < 0 ) {
                         // connection failed
-                        socket_list[ i ] = -1 ;
-                        waiting_sockets--;
-                        FD_CLR( i, &readset );
                     } else {
                         code[3] = 0;
                         if ( mx_debug_mode )
                             printf( "Code: %s\n", code );
-                        close( i );
-                        FD_CLR( i, &readset );
                         ml->mx_ok++;
                     }
+                    // anyway, we don't need this socket anymore
+                    waiting_sockets--;
+                    close( i );
+                    socket_list[ i ] = -1 ;
+                    FD_CLR( i, &readset );
                 }
             }
         }           
     }
 
+    // close (eventual) remaining sockets
     for ( i = 0 ; i <= max_socket ; ++i ) {
         if ( socket_list[ i ] > 0 ) {
             close( socket_list[ i ] );
@@ -223,7 +246,7 @@ int _create_socket( gpointer* data )
     if ( ( unit = socket( AF_INET, SOCK_STREAM, 0 ) ) < 0 ) {
         fprintf( stderr, "Error creating socket\n" );
     }
-/* Set socket to non-blocking */
+    /* Set socket to non-blocking */
     if ((flags = fcntl( unit, F_GETFL, 0)) < 0){
         /* Handle error */
     }
@@ -233,3 +256,14 @@ int _create_socket( gpointer* data )
     return unit;
 }
 
+void mx_list_clear( mx_list_t* ml )
+{
+    GList* iter;
+    for ( iter = g_list_first( ml->mxs ) ;
+          NULL != iter ;
+          iter = g_list_next( iter ) ) {
+        free( iter->data );
+    }
+    g_list_free( ml->mxs );
+    ml->mxs = NULL;
+}

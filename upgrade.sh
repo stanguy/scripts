@@ -1,4 +1,4 @@
-#! /bin/zsh
+#! /bin/sh
 
 if [ $# -ne 2 ] ; then
     echo "Usage: $0 sourcedir destdir"

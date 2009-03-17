@@ -1,7 +1,16 @@
 #! /usr/bin/env ruby
 
-require 'rexml/document'
-#include REXML
+
+## Time to beat, with rexml:
+# % time ./deli2db.rb > /dev/null 
+# ./deli2db.rb > /dev/null  3.72s user 0.18s system 99% cpu 3.909 total
+# and we get:
+# % time ./deli2db.rb  > /dev/null 
+# ./deli2db.rb > /dev/null  0.54s user 0.08s system 99% cpu 0.626 total
+
+
+require 'rubygems'
+require 'hpricot'
 require 'iconv'
 conv = Iconv.new( "LATIN1", "UTF-8" )
 
@@ -9,15 +18,15 @@ conv = Iconv.new( "LATIN1", "UTF-8" )
 Source_db = "/Users/seb/Library/Application Support/Delicious Library/Library Media Data.xml"
 
 file = File.new( Source_db )
-doc = REXML::Document.new( file )
+doc = Hpricot.XML( file )
 
-uuids = doc.elements.collect( "library/shelves/shelf[@name='to-be-read']/linkto" ) do |x|
+uuids = doc.search("library/shelves/shelf[@name='to-be-read']/linkto").collect do |x|
   x.attributes["uuid"]
 end
 
 #puts uuids.inspect
 
-doc.elements.each("library/items/book") do |x|
+doc.search("library/items/book") do |x|
   if not uuids.include? x.attributes["uuid"]
     next
   end

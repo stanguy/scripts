@@ -1,0 +1,39 @@
+#! /usr/bin/env ruby
+
+rd, wr = IO::pipe
+
+fork {
+  sleep 2
+  $stdin.reopen rd
+  exec "/usr/bin/awesome-client"
+}
+
+def checkmail
+  dirs = Dir.glob( ENV["HOME"] + "/Maildir/*" )
+
+  sum = 0
+  dirs.collect{|d|
+    d if File.directory? d
+  }.each{|d|
+    new = Dir.glob( d + "/new/*" )
+    sum += new.size
+  }
+  base = "0 widget_tell mystatusbar mail "
+  if sum > 0
+    base += "bg #500A0A"
+  else
+    base += "bg #444444"
+  end
+  base_nb = "0 widget_tell mystatusbar mail text " + sum.to_s
+  return [ base, base_nb ].join("\n")  + "\n"
+end
+
+
+while true do
+  t = Time.now
+  wr.print "0 widget_tell mystatusbar clock text " + t.strftime("%H:%M:%S") + "\n"
+  wr.print checkmail
+  wr.print "\n"
+  wr.flush
+  sleep 1
+end

@@ -1,0 +1,18 @@
+awesome-status
+  A simple script to update information in the status bar
+  (currently handles time, CPU and eventually Maildir).
+deli2db.rb
+  Exports parts of a Delicious Library to a partial DocBook output.
+djbmx.c
+  Test MX servers for a given domain.
+img-gps-map.pl
+  Extract GPS waypoint coordinates from a gpx file and (exif) tag
+  image, based on time.
+mirror_perso.py
+  Mirrors a local directory to a remote FTP server.
+mxtest.pl
+  Test MX servers for a given domain.
+mxtest_thr.pl
+  Test MX servers for a given domain.
+upgrade.sh
+  Merge two directories interactively.

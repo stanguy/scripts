@@ -28,11 +28,23 @@ def checkmail
   return [ base, base_nb ].join("\n")  + "\n"
 end
 
+def checkcpu()
+  File.open( "/proc/loadavg" ) do |load|
+    data = load.readline
+    mdata = data.match( /^(\d+\.\d+) / )
+    return "0 widget_tell mystatusbar cpu data 1 " + (mdata[1].to_f * 100).to_i.to_s + "\n"
+    return "0 widget_tell mystatusbar cpu data 5 " + (mdata[2].to_f * 100).to_i.to_s + "\n"
+    return "0 widget_tell mystatusbar cpu data 15 " + (mdata[3].to_f * 100).to_i.to_s + "\n"
+  end
+end
+    
+
 
 while true do
   t = Time.now
   wr.print "0 widget_tell mystatusbar clock text " + t.strftime("%H:%M:%S") + "\n"
-  wr.print checkmail
+  wr.print checkcpu
+#  wr.print checkmail
   wr.print "\n"
   wr.flush
   sleep 1

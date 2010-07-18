@@ -184,6 +184,7 @@ int _create_socket( gpointer* );
 
 typedef struct {
     int max_socket;
+    int nb_sockets;
     fd_set readset;
     int waiting_sockets;
     int* socket_list;
@@ -201,7 +202,8 @@ void mx_list_test_them( mx_list_t* ml )
     sw.waiting_sockets = 0;
     // keep an  array of all our sockets  so that we can  close all of
     // them if we timeout
-    sw.socket_list = malloc( sizeof( int ) * g_list_length( ml->mxs ) );
+    sw.nb_sockets = g_list_length( ml->mxs );
+    sw.socket_list = malloc( sizeof( int ) * sw.nb_sockets );
     
     FD_ZERO(&sw.readset);
 
@@ -209,7 +211,7 @@ void mx_list_test_them( mx_list_t* ml )
     ml->mx_ok = sw_select( &sw );
 
     // close (eventual) remaining sockets
-    for ( i = 0 ; i <= sw.max_socket ; ++i ) {
+    for ( i = 0 ; i < sw.nb_sockets ; ++i ) {
         if ( sw.socket_list[ i ] > 0 ) {
             close( sw.socket_list[ i ] );
         }
@@ -280,13 +282,13 @@ int sw_select( socket_work* sw )
         } else {
             int i;
             // now, try to find which socket did wake us up
-            for ( i = 0 ; i <= sw->max_socket ; ++i ) {
-                if ( FD_ISSET( i, &tempset ) ){
+            for ( i = 0 ; i < sw->nb_sockets ; ++i ) {
+                if ( FD_ISSET( sw->socket_list[ i ], &tempset ) ){
                     // this one has something to say
                     char code[4];
                     // try  to read  something (this  will  trigger an
                     // error if the socket could not connect
-                    res = read( i, code, 3 );
+                    res = read( sw->socket_list[ i ], code, 3 );
                     if ( res < 0 ) {
                         // connection failed
                     } else {
@@ -298,7 +300,7 @@ int sw_select( socket_work* sw )
                     // anyway, we don't need this socket anymore
                     sw->waiting_sockets--;
                     sw->socket_list[ i ] = -1 ;
-                    FD_CLR( i, &sw->readset );
+                    FD_CLR( sw->socket_list[ i ], &sw->readset );
                     close( i );
                 }
             }
